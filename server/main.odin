@@ -4,7 +4,6 @@ import "core:fmt"
 import "core:mem"
 import "core:os"
 import "core:strconv"
-import "core:time"
 import "vendor:ENet"
 
 HOST_IP :: ENet.HOST_ANY
@@ -68,8 +67,10 @@ main :: proc()
 	)
 	defer ENet.host_destroy(host)
 
-	peers := make([dynamic]^ENet.Peer)
-	defer delete(peers)
+	fmt.println("Server listening on port", serverPort)
+
+	clients := make([dynamic]^ENet.Peer)
+	defer delete(clients)
 
 	// batch processing events?
 
@@ -87,10 +88,16 @@ main :: proc()
 			timeout = num_clients == 0 ? TIMEOUT_MS_NO_CLIENTS : TIMEOUT_MS_MAX
 		case .CONNECT:
 			num_clients += 1
+			append(&clients, event.peer)
+			fmt.println("Client connected: ...")
 		case .RECEIVE:
+			fmt.println("Packet received from ...")
 			ENet.packet_destroy(event.packet)
 		case .DISCONNECT:
 			num_clients -= 1
+			disconnectedClientIndex := 0
+			unordered_remove(&clients, disconnectedClientIndex)
+			fmt.println("Client disconnected:", disconnectedClientIndex)
 		}
 	}
 }
