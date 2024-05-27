@@ -16,6 +16,8 @@ TIMEOUT_MS_BASE :: 1
 TIMEOUT_MS_MAX :: 16
 TIMEOUT_MS_NO_CLIENTS :: 1024
 
+PeerId :: u16
+
 main :: proc() 
 {
 	track: mem.Tracking_Allocator
@@ -69,7 +71,7 @@ main :: proc()
 
 	fmt.println("Server listening on port", serverPort)
 
-	clients := make([dynamic]^ENet.Peer)
+	clients := make(map[PeerId]^ENet.Peer)
 	defer delete(clients)
 
 	// batch processing events?
@@ -78,7 +80,7 @@ main :: proc()
 	num_clients: u32 = 0
 	event: ENet.Event
 
-	for {
+	event_loop: for {
 		if ENet.host_service(host, &event, timeout) < 0 {
 			panic("Could not call host_service")
 		}
@@ -88,16 +90,22 @@ main :: proc()
 			timeout = num_clients == 0 ? TIMEOUT_MS_NO_CLIENTS : TIMEOUT_MS_MAX
 		case .CONNECT:
 			num_clients += 1
-			append(&clients, event.peer)
-			fmt.println("Client connected: ...")
+			clients[event.peer.incomingPeerID] = event.peer
+			fmt.println("Client connect", event.peer.incomingPeerID)
 		case .RECEIVE:
 			fmt.println("Packet received from ...")
 			ENet.packet_destroy(event.packet)
 		case .DISCONNECT:
 			num_clients -= 1
-			disconnectedClientIndex := 0
-			unordered_remove(&clients, disconnectedClientIndex)
-			fmt.println("Client disconnected:", disconnectedClientIndex)
+			remove_id := event.peer.incomingPeerID
+			delete_key(&clients, remove_id)
+			fmt.println("Client disconnect", event.peer.incomingPeerID)
+
+			// allow clean shutdown for development
+			//
+			if num_clients == 0 {
+				break event_loop
+			}
 		}
 	}
 }
