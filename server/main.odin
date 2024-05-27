@@ -74,8 +74,6 @@ main :: proc()
 	clients := make(map[PeerId]^ENet.Peer)
 	defer delete(clients)
 
-	// batch processing events?
-
 	timeout: u32 = TIMEOUT_MS_MAX
 	num_clients: u32 = 0
 	event: ENet.Event
@@ -91,15 +89,19 @@ main :: proc()
 		case .CONNECT:
 			num_clients += 1
 			clients[event.peer.incomingPeerID] = event.peer
-			fmt.println("Client connect", event.peer.incomingPeerID)
+			fmt.println("Client connected: ", event.peer.incomingPeerID)
 		case .RECEIVE:
-			fmt.println("Packet received from ...")
-			ENet.packet_destroy(event.packet)
+			// TODO: accumulate events?
+			// FIX: this sends a clients own position back to it.
+			// Maybe batch updates for multiple clients in an array
+			// of new positions with corresponding client id.
+			// Clients can filter whom not to display.
+			ENet.host_broadcast(host, 0, event.packet)
 		case .DISCONNECT:
 			num_clients -= 1
 			remove_id := event.peer.incomingPeerID
 			delete_key(&clients, remove_id)
-			fmt.println("Client disconnect", event.peer.incomingPeerID)
+			fmt.println("Client disconnected: ", event.peer.incomingPeerID)
 
 			// allow clean shutdown for development
 			//
