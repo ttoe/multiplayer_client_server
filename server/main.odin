@@ -9,9 +9,6 @@ import "core:strconv"
 import "vendor:ENet"
 
 HOST_IP :: ENet.HOST_ANY
-CHANNEL_LIMIT :: 2
-BANDWIDTH_IN :: 0
-BANDWIDTH_OUT :: 0
 
 TIMEOUT_MS_BASE :: 1
 TIMEOUT_MS_MAX :: 16
@@ -45,10 +42,10 @@ main :: proc()
 	address: ENet.Address = {HOST_IP, serverPort}
 	host := ENet.host_create(
 		&address,
-		net.CLIENT_COUNT_MAX,
-		CHANNEL_LIMIT,
-		BANDWIDTH_IN,
-		BANDWIDTH_OUT,
+		net.CLIENT_COUNT_MAX_SERVER,
+		net.CHANNEL_LIMIT,
+		net.BANDWIDTH_IN,
+		net.BANDWIDTH_OUT,
 	)
 	defer ENet.host_destroy(host)
 

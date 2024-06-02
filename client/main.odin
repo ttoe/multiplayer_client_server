@@ -1,20 +1,14 @@
 package main
 
 import "../common/alloc"
+import "../common/args"
 import "../common/net"
 import "core:fmt"
 import "core:mem"
 import "core:os"
-import "core:strconv"
-import "core:strings"
 import "player"
 import "vendor:ENet"
 import rl "vendor:raylib"
-
-PEER_COUNT_MAX :: 1
-CHANNEL_LIMIT :: 2
-BANDWIDTH_IN :: 0
-BANDWIDTH_OUT :: 0
 
 main :: proc() 
 {
@@ -23,45 +17,11 @@ main :: proc()
 	context.allocator = mem.tracking_allocator(&track)
 	defer alloc.tracking_allocator_check(&track)
 
-	arguments := os.args[1:]
-	if len(arguments) < 2 {
-		fmt.println("Please provide the server to connect to: <server> <port>")
-		return
-	}
+	server_ip, server_port := args.parse_server_ip_and_port(os.args[1:])
+	server, client := net.initialize_client_connection(server_ip, server_port)
+	defer net.destroy_client_connection(server, client)
 
-	serverPort_u64, ok := strconv.parse_u64(arguments[1])
-	if !ok || serverPort_u64 < 1025 || serverPort_u64 > 65535 {
-		fmt.println("Please provide a port in the range 1025..=65535")
-		return
-	}
-	serverPort := u16(serverPort_u64)
-
-	if ENet.initialize() != 0 {
-		fmt.eprintln("Failure to initialize ENet")
-		return
-	}
-	defer ENet.deinitialize()
-
-	client := ENet.host_create(nil, 1, CHANNEL_LIMIT, BANDWIDTH_IN, BANDWIDTH_OUT)
-	defer ENet.host_destroy(client)
-
-	serverAddress: ENet.Address
-	serverIp := strings.clone_to_cstring(arguments[0])
-	if ENet.address_set_host_ip(&serverAddress, serverIp) < 0 {
-		fmt.eprintln("Failure to parse and set server IP address")
-		return
-	}
-	delete_cstring(serverIp)
-
-	serverAddress.port = serverPort
-	server := ENet.host_connect(client, &serverAddress, 2, 0)
-	if server == nil {
-		fmt.eprintln("Failure to connect to server")
-		return
-	}
-	defer ENet.peer_disconnect(server, 0)
-
-	// game
+	// Game
 	// 
 	rl.InitWindow(300, 300, "MULTIPLAYER")
 	defer rl.CloseWindow()
@@ -76,7 +36,7 @@ main :: proc()
 	//
 	client_data_self: net.Client_Data
 
-	players: [net.CLIENT_COUNT_MAX]net.Client_Data
+	players: [net.CLIENT_COUNT_MAX_SERVER]net.Client_Data
 
 	for !rl.WindowShouldClose() {
 
