@@ -1,5 +1,7 @@
 package main
 
+import "../common/alloc"
+import "../common/net"
 import "core:fmt"
 import "core:mem"
 import "core:os"
@@ -19,23 +21,7 @@ main :: proc()
 	track: mem.Tracking_Allocator
 	mem.tracking_allocator_init(&track, context.allocator)
 	context.allocator = mem.tracking_allocator(&track)
-
-	defer 
-	{
-		if len(track.allocation_map) > 0 {
-			fmt.eprintf("=== %v allocations not freed: ===\n", len(track.allocation_map))
-			for _, entry in track.allocation_map {
-				fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
-			}
-		}
-		if len(track.bad_free_array) > 0 {
-			fmt.eprintf("=== %v incorrect frees: ===\n", len(track.bad_free_array))
-			for entry in track.bad_free_array {
-				fmt.eprintf("- %p @ %v\n", entry.memory, entry.location)
-			}
-		}
-		mem.tracking_allocator_destroy(&track)
-	}
+	defer alloc.tracking_allocator_check(&track)
 
 	arguments := os.args[1:]
 	if len(arguments) < 2 {
@@ -77,7 +63,7 @@ main :: proc()
 
 	// game
 	// 
-	rl.InitWindow(500, 500, "MULTIPLAYER")
+	rl.InitWindow(300, 300, "MULTIPLAYER")
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(60)
 
@@ -86,6 +72,14 @@ main :: proc()
 	// This event will be overwritten each time an a new event arrives
 	//
 	event: ENet.Event
+
+	// The client's data will be modified before sending.
+	// The packet size is not variable and calculated once.
+	//
+	client_data_self: net.Client_Data
+	packet_size: uint = size_of(net.Packet_Data)
+
+	players: [net.CLIENT_COUNT_MAX]net.Client_Data
 
 	for !rl.WindowShouldClose() {
 
@@ -103,6 +97,16 @@ main :: proc()
 			case .CONNECT:
 				fmt.println("Connected to server")
 			case .RECEIVE:
+				packet := (cast(^net.Packet_Data)event.packet.data)^
+				switch packet_data in packet {
+				case net.PeerId:
+					// receive own id and set self to connected
+					//
+					client_data_self.clientId = packet_data
+					client_data_self.connected = true
+				case net.Client_Data:
+					players[packet_data.clientId] = packet_data
+				}
 				ENet.packet_destroy(event.packet)
 			case .DISCONNECT:
 				fmt.println("Disconnected from server")
@@ -111,29 +115,43 @@ main :: proc()
 
 		dt := rl.GetFrameTime()
 
-		input_received := player.handle_input(&p, dt)
-
-		if input_received {
-			send_pos := p.pos
-			packet_size: uint = size_of(send_pos)
-			position_data_rawptr := raw_data(&send_pos)
+		if player.handle_input(&p, dt) {
+			client_data_self.position = p.pos
 			packet := ENet.packet_create(
-				position_data_rawptr,
+				&client_data_self,
 				packet_size,
 				{.UNRELIABLE_FRAGMENT},
 			)
-			send_result := ENet.peer_send(server, 0, packet)
-			if send_result != 0 {
-				fmt.eprintln("Failure to send packet")
-			}
+			ENet.peer_send(server, 0, packet)
 		}
 
 		rl.BeginDrawing()
 		defer rl.EndDrawing()
 		rl.ClearBackground(rl.RAYWHITE)
 
-		player.draw(p)
+		// Draw other players
+		//
+		for c in players {
+			if c.connected && c.clientId != client_data_self.clientId {
+				position_draw(c.position, 15, rl.BLUE)
+			}
+		}
 
+		// Draw self
+		//
+		if client_data_self.connected {
+			c := players[client_data_self.clientId]
+			position_draw(c.position, 20, rl.RED)
+		}
 	}
+}
 
+position_draw :: proc(position: [2]f32, size: f32, color: rl.Color) 
+{
+	rl.DrawRectanglePro(
+		rl.Rectangle{position.x, position.y, size, size},
+		{0, 0},
+		0,
+		color,
+	)
 }
