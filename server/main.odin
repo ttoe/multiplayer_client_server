@@ -60,7 +60,6 @@ main :: proc()
 	timeout: u32 = TIMEOUT_MS_MAX
 	num_clients: u32 = 0
 	event: ENet.Event
-	packet_size: uint = size_of(net.Packet_Data)
 
 	event_loop: for {
 		if ENet.host_service(host, &event, timeout) < 0 {
@@ -71,62 +70,52 @@ main :: proc()
 		case .NONE:
 			timeout = num_clients == 0 ? TIMEOUT_MS_NO_CLIENTS : TIMEOUT_MS_MAX
 		case .CONNECT:
+			// Keep track of the client count and save the client (peer)
+			// into the array of clients.
+			//
 			num_clients += 1
-			peerId := event.peer.incomingPeerID
-			clients[peerId] = event.peer
+			peer_id := event.peer.incomingPeerID
+			clients[peer_id] = event.peer
 
 			// tell new client its id
 			//
-			client_id: net.Packet_Data = peerId
-			packet_client_id := ENet.packet_create(
-				&client_id,
-				packet_size,
-				{.UNRELIABLE_FRAGMENT},
-			)
-			ENet.peer_send(event.peer, 0, packet_client_id)
+			client_id: net.Packet_Data = peer_id
+			net.packet_send(net.Packet_Data, &client_id, event.peer)
 
 			// broadcast new client data to everyone
 			//
 			new_client_connection: net.Packet_Data = net.Client_Data {
-				clientId  = peerId,
+				clientId  = peer_id,
 				connected = true,
 				position  = {0, 0},
 			}
+			net.packet_broadcast(net.Packet_Data, &new_client_connection, host)
 
-			packet_new_client_connection := ENet.packet_create(
-				&new_client_connection,
-				packet_size,
-				{.UNRELIABLE_FRAGMENT},
-			)
-			ENet.host_broadcast(host, 0, packet_new_client_connection)
-			fmt.println("Client connected: ", event.peer.incomingPeerID)
+			// TODO: broadcast already connected clients to newly connected client
+
+			fmt.println("Client connected: ", peer_id)
 		case .RECEIVE:
 			// TODO: accumulate events?
+			// TODO: send Packet_Data from clients and receive here
 			clientData := (cast(^net.Client_Data)event.packet.data)^
 			clientData.clientId = event.peer.incomingPeerID
 			client_data_2: net.Packet_Data = clientData
-			packet := ENet.packet_create(
-				&client_data_2,
-				packet_size,
-				{.UNRELIABLE_FRAGMENT},
-			)
-			ENet.host_broadcast(host, 0, packet)
+			net.packet_broadcast(net.Packet_Data, &client_data_2, host)
 		case .DISCONNECT:
+			// Keep track of client count and broadcast the disconnected client's
+			// status to others.
+			// 
 			num_clients -= 1
-			remove_id := event.peer.incomingPeerID
-			remove_client: net.Packet_Data = net.Client_Data {
-				clientId  = remove_id,
+			disconnected_client_id := event.peer.incomingPeerID
+			disconnected_client: net.Packet_Data = net.Client_Data {
+				clientId  = disconnected_client_id,
 				connected = false,
 				position  = {0, 0},
 			}
-			packet := ENet.packet_create(
-				&remove_client,
-				packet_size,
-				{.UNRELIABLE_FRAGMENT},
-			)
-			ENet.host_broadcast(host, 0, packet)
-			delete_key(&clients, remove_id)
-			fmt.println("Client disconnected: ", event.peer.incomingPeerID)
+			net.packet_broadcast(net.Packet_Data, &disconnected_client, host)
+
+			delete_key(&clients, disconnected_client_id)
+			fmt.println("Client disconnected: ", disconnected_client_id)
 
 			// allow clean shutdown for development
 			//

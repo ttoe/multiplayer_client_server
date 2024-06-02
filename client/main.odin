@@ -77,7 +77,6 @@ main :: proc()
 	// The packet size is not variable and calculated once.
 	//
 	client_data_self: net.Client_Data
-	packet_size: uint = size_of(net.Packet_Data)
 
 	players: [net.CLIENT_COUNT_MAX]net.Client_Data
 
@@ -116,13 +115,9 @@ main :: proc()
 		dt := rl.GetFrameTime()
 
 		if player.handle_input(&p, dt) {
+			// TODO: Use Packet_Data
 			client_data_self.position = p.pos
-			packet := ENet.packet_create(
-				&client_data_self,
-				packet_size,
-				{.UNRELIABLE_FRAGMENT},
-			)
-			ENet.peer_send(server, 0, packet)
+			net.packet_send(net.Client_Data, &client_data_self, server)
 		}
 
 		rl.BeginDrawing()
@@ -136,6 +131,12 @@ main :: proc()
 				position_draw(c.position, 15, rl.BLUE)
 			}
 		}
+
+		// TODO: drawing self from players array is problematic especially 
+		// when first starting to move.
+		// The own position should only be synced with the server every so often
+		// but not controlled by it.
+		// This creates a jumping motion.
 
 		// Draw self
 		//
