@@ -67,8 +67,6 @@ main :: proc()
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(60)
 
-	p := player.init()
-
 	// This event will be overwritten each time an a new event arrives
 	//
 	event: ENet.Event
@@ -99,12 +97,14 @@ main :: proc()
 				packet := (cast(^net.Packet_Data)event.packet.data)^
 				switch packet_data in packet {
 				case net.PeerId:
-					// receive own id and set self to connected
+					// Receive own id and set self to connected.
 					//
-					client_data_self.clientId = packet_data
+					client_data_self.client_id = packet_data
 					client_data_self.connected = true
 				case net.Client_Data:
-					players[packet_data.clientId] = packet_data
+					// Update players array, even with own data.
+					// 
+					players[packet_data.client_id] = packet_data
 				}
 				ENet.packet_destroy(event.packet)
 			case .DISCONNECT:
@@ -114,10 +114,9 @@ main :: proc()
 
 		dt := rl.GetFrameTime()
 
-		if player.handle_input(&p, dt) {
-			// TODO: Use Packet_Data
-			client_data_self.position = p.pos
-			net.packet_send(net.Client_Data, &client_data_self, server)
+		if player.handle_input(&client_data_self.player, dt) {
+			client_data_update: net.Packet_Data = client_data_self
+			net.packet_send(net.Packet_Data, &client_data_update, server)
 		}
 
 		rl.BeginDrawing()
@@ -127,22 +126,15 @@ main :: proc()
 		// Draw other players
 		//
 		for c in players {
-			if c.connected && c.clientId != client_data_self.clientId {
-				position_draw(c.position, 15, rl.BLUE)
+			if c.connected && c.client_id != client_data_self.client_id {
+				position_draw(c.player.pos, 15, rl.BLUE)
 			}
 		}
-
-		// TODO: drawing self from players array is problematic especially 
-		// when first starting to move.
-		// The own position should only be synced with the server every so often
-		// but not controlled by it.
-		// This creates a jumping motion.
 
 		// Draw self
 		//
 		if client_data_self.connected {
-			c := players[client_data_self.clientId]
-			position_draw(c.position, 20, rl.RED)
+			position_draw(client_data_self.player.pos, 20, rl.RED)
 		}
 	}
 }

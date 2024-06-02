@@ -6,21 +6,14 @@ Vec2 :: rl.Vector2
 Rect :: rl.Rectangle
 
 PLAYER_SPEED: f32 : 150
-PLAYER_SIZE :: 30
-
-State :: enum {
-	CONNECTED,
-	DISCONNECTED,
-}
 
 Player :: struct {
-	pos:   Vec2,
-	state: State,
+	pos: Vec2,
 }
 
 init :: proc() -> Player 
 {
-	return Player{{PLAYER_SIZE / 2, PLAYER_SIZE / 2}, .DISCONNECTED}
+	return Player{{0, 0}}
 }
 
 handle_input :: proc(player: ^Player, dt: f32) -> bool 
@@ -45,14 +38,4 @@ handle_input :: proc(player: ^Player, dt: f32) -> bool
 	}
 
 	return input_received
-}
-
-draw :: proc(player: Player) 
-{
-	rl.DrawRectanglePro(
-		Rect{player.pos.x, player.pos.y, PLAYER_SIZE, PLAYER_SIZE},
-		{PLAYER_SIZE / 2, PLAYER_SIZE / 2},
-		0,
-		rl.RED,
-	)
 }

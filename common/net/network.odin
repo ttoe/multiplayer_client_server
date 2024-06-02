@@ -1,18 +1,18 @@
 package net
 
+import "../../client/player"
 import "vendor:ENet"
 
 CLIENT_COUNT_MAX :: 4
 
 PeerId :: u16
 
-// Holds all connected client's positions
-// to be sent to all clients.
+// Holds a connected client's position to be sent to the server.
 //
 Client_Data :: struct {
-	clientId:  PeerId,
+	client_id: PeerId,
 	connected: bool,
-	position:  [2]f32,
+	player:    player.Player,
 }
 
 Packet_Data :: union {

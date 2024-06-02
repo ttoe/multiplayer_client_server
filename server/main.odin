@@ -85,9 +85,9 @@ main :: proc()
 			// broadcast new client data to everyone
 			//
 			new_client_connection: net.Packet_Data = net.Client_Data {
-				clientId  = peer_id,
+				client_id = peer_id,
 				connected = true,
-				position  = {0, 0},
+				player    = {{0, 0}},
 			}
 			net.packet_broadcast(net.Packet_Data, &new_client_connection, host)
 
@@ -96,11 +96,13 @@ main :: proc()
 			fmt.println("Client connected: ", peer_id)
 		case .RECEIVE:
 			// TODO: accumulate events?
-			// TODO: send Packet_Data from clients and receive here
-			clientData := (cast(^net.Client_Data)event.packet.data)^
-			clientData.clientId = event.peer.incomingPeerID
-			client_data_2: net.Packet_Data = clientData
-			net.packet_broadcast(net.Packet_Data, &client_data_2, host)
+			packet_data := (cast(^net.Packet_Data)event.packet.data)^
+			#partial switch &data in packet_data {
+			case net.Client_Data:
+				data.client_id = event.peer.incomingPeerID
+				packet: net.Packet_Data = data
+				net.packet_broadcast(net.Packet_Data, &packet, host)
+			}
 		case .DISCONNECT:
 			// Keep track of client count and broadcast the disconnected client's
 			// status to others.
@@ -108,9 +110,9 @@ main :: proc()
 			num_clients -= 1
 			disconnected_client_id := event.peer.incomingPeerID
 			disconnected_client: net.Packet_Data = net.Client_Data {
-				clientId  = disconnected_client_id,
+				client_id = disconnected_client_id,
 				connected = false,
-				position  = {0, 0},
+				player    = {{0, 0}},
 			}
 			net.packet_broadcast(net.Packet_Data, &disconnected_client, host)
 
