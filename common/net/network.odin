@@ -93,3 +93,28 @@ destroy_client_connection :: proc(server: ^ENet.Peer, client: ^ENet.Host)
 	ENet.host_destroy(client)
 	ENet.deinitialize()
 }
+
+// Server runs on localhost with the given port.
+//
+initialize_server :: proc(server_port: u16) -> ^ENet.Host 
+{
+	if ENet.initialize() != 0 {
+		panic("Failure to initialize ENet")
+	}
+
+	address: ENet.Address = {ENet.HOST_ANY, server_port}
+
+	return ENet.host_create(
+		&address,
+		CLIENT_COUNT_MAX_SERVER,
+		CHANNEL_LIMIT,
+		BANDWIDTH_IN,
+		BANDWIDTH_OUT,
+	)
+}
+
+destroy_server :: proc(server: ^ENet.Host) 
+{
+	ENet.host_destroy(server)
+	ENet.deinitialize()
+}

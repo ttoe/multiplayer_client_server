@@ -1,14 +1,12 @@
 package main
 
 import "../common/alloc"
+import "../common/args"
 import "../common/net"
 import "core:fmt"
 import "core:mem"
 import "core:os"
-import "core:strconv"
 import "vendor:ENet"
-
-HOST_IP :: ENet.HOST_ANY
 
 TIMEOUT_MS_BASE :: 1
 TIMEOUT_MS_MAX :: 16
@@ -21,35 +19,10 @@ main :: proc()
 	context.allocator = mem.tracking_allocator(&tracking_alloc)
 	defer alloc.tracking_allocator_check(&tracking_alloc)
 
-	arguments := os.args[1:]
-	if len(arguments) == 0 {
-		fmt.println("Please provide the port to listen on: ./server <PORT>")
-		return
-	}
-	serverPort_u64, ok := strconv.parse_u64(arguments[0])
-	if !ok || serverPort_u64 < 1025 || serverPort_u64 > 65535 {
-		fmt.println("Please provide a port in the range 1025..=65535")
-		return
-	}
-	serverPort := u16(serverPort_u64)
-
-	if ENet.initialize() != 0 {
-		fmt.eprintln("Failure to initialize ENet")
-		return
-	}
-	defer ENet.deinitialize()
-
-	address: ENet.Address = {HOST_IP, serverPort}
-	host := ENet.host_create(
-		&address,
-		net.CLIENT_COUNT_MAX_SERVER,
-		net.CHANNEL_LIMIT,
-		net.BANDWIDTH_IN,
-		net.BANDWIDTH_OUT,
-	)
-	defer ENet.host_destroy(host)
-
-	fmt.println("Server listening on port", serverPort)
+	server_port := args.parse_server_port(os.args[1:])
+	server := net.initialize_server(server_port)
+	defer net.destroy_server(server)
+	fmt.println("Server listening on port", server_port)
 
 	clients := make(map[net.PeerId]^ENet.Peer)
 	defer delete(clients)
@@ -59,7 +32,7 @@ main :: proc()
 	event: ENet.Event
 
 	event_loop: for {
-		if ENet.host_service(host, &event, timeout) < 0 {
+		if ENet.host_service(server, &event, timeout) < 0 {
 			panic("Could not call host_service")
 		}
 
@@ -86,7 +59,7 @@ main :: proc()
 				connected = true,
 				player    = {{0, 0}},
 			}
-			net.packet_broadcast(net.Packet_Data, &new_client_connection, host)
+			net.packet_broadcast(net.Packet_Data, &new_client_connection, server)
 
 			// TODO: broadcast already connected clients to newly connected client
 
@@ -98,7 +71,7 @@ main :: proc()
 			case net.Client_Data:
 				data.client_id = event.peer.incomingPeerID
 				packet: net.Packet_Data = data
-				net.packet_broadcast(net.Packet_Data, &packet, host)
+				net.packet_broadcast(net.Packet_Data, &packet, server)
 			}
 		case .DISCONNECT:
 			// Keep track of client count and broadcast the disconnected client's
@@ -111,7 +84,7 @@ main :: proc()
 				connected = false,
 				player    = {{0, 0}},
 			}
-			net.packet_broadcast(net.Packet_Data, &disconnected_client, host)
+			net.packet_broadcast(net.Packet_Data, &disconnected_client, server)
 
 			delete_key(&clients, disconnected_client_id)
 			fmt.println("Client disconnected: ", disconnected_client_id)

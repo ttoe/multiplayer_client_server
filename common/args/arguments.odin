@@ -22,3 +22,16 @@ parse_server_ip_and_port :: proc(
 	server_port = u16(server_port_u64)
 	return
 }
+
+parse_server_port :: proc(arguments: []string) -> u16 
+{
+	if len(arguments) == 0 {
+		panic("Please provide the port to listen on: ./server <PORT>")
+	}
+	server_port_u64, ok := strconv.parse_u64(arguments[0])
+	if !ok || server_port_u64 < 1025 || server_port_u64 > 65535 {
+		panic("Please provide a port in the range 1025..=65535")
+	}
+
+	return u16(server_port_u64)
+}
